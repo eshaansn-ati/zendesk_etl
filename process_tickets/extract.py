@@ -21,7 +21,7 @@ ZENDESK_SUBDOMAIN = os.getenv("ZENDESK_SUBDOMAIN")
 ZENDESK_EMAIL = os.getenv("ZENDESK_EMAIL")
 ZENDESK_API_TOKEN = os.getenv("ZENDESK_API_TOKEN")
 
-DATA_DIR = os.getenv("DATA_DIR")
+DATA_DIR = os.getenv("OUTPUT_DIR")
 EXTRACT_TICKETS_PATH = os.getenv("EXTRACT_TICKETS_PATH")
 CONFIG_DIR = os.getenv("CONFIG_DIR")
 
@@ -105,7 +105,7 @@ def main():
     
     # Input validation
     if not all([ZENDESK_SUBDOMAIN, ZENDESK_EMAIL, ZENDESK_API_TOKEN, DATA_DIR, EXTRACT_TICKETS_PATH, CONFIG_DIR]):
-        print("!!! Error: ZENDESK_SUBDOMAIN, ZENDESK_EMAIL, ZENDESK_API_TOKEN, DATA_DIR, EXTRACT_TICKETS_PATH, or CONFIG_DIR not found in environment variables.")
+        print("!!! Error: ZENDESK_SUBDOMAIN, ZENDESK_EMAIL, ZENDESK_API_TOKEN, OUTPUT_DIR, EXTRACT_TICKETS_PATH, or CONFIG_DIR not found in environment variables.")
         return
 
     auth = (f"{ZENDESK_EMAIL}/token", ZENDESK_API_TOKEN)

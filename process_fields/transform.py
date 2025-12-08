@@ -2,64 +2,49 @@ import json
 import dotenv
 import os
 import glob
+from datetime import datetime
 
 dotenv.load_dotenv()
 
 DATA_DIR = os.getenv("DATA_DIR")
 EXTRACT_FIELDS_PATH = os.getenv("EXTRACT_FIELDS_PATH")
+TRANSFORM_FIELDS_PATH = os.getenv("TRANSFORM_FIELDS_PATH")
+
 INPUT_DIR = f"{DATA_DIR}/{EXTRACT_FIELDS_PATH}"
+
+OUTPUT_DIR = f"{DATA_DIR}/{TRANSFORM_FIELDS_PATH}"
+if not os.path.exists(OUTPUT_DIR):
+    os.makedirs(OUTPUT_DIR)
 
 def extract_zendesk_fields(data):
     """
     Processes Zendesk ticket_fields data (already loaded as a dictionary) 
     to extract field metadata and custom options.
     """
-    
-    # Ensure the main 'ticket_fields' key exists
-    if 'ticket_fields' not in data:
-        print("Error: JSON data does not contain the 'ticket_fields' key.")
-        return []
-
     field_inventory = []
+    for field in data:
+        field_inventory.append({
+            "id": field["id"],
+            "title": field["title"],
+            "type": field["type"],
+            "description": field["description"],
+            "created_at": field["created_at"],
+            "updated_at": field["updated_at"],
+            "active": field["active"],
+            "required": field["required"],
+    
+        })
 
-    for field in data['ticket_fields']:
-        
-        # 1. Extract Core Metadata
-        field_data = {
-            'id': field.get('id'),
-            'type': field.get('type'),
-            'title': field.get('title'),
-            'tag': field.get('tag'),
-            'active': field.get('active')
-        }
+        if "custom_field_options" in field:
+            field_inventory[-1]["custom_field_options"] = field["custom_field_options"]
 
-        # 2. Extract Options (Conditional Logic for dropdown/multi_select)
-        if field_data['type'] in ('dropdown', 'multi_select'):
-            
-            options_list = []
-            
-            # Use .get() with an empty list default for safety
-            options = field.get('custom_field_options', []) 
-            
-            for option in options:
-                options_list.append({
-                    'option_name': option.get('name'),
-                    'option_tag': option.get('value'),
-                    'option_id': option.get('id')
-                })
-            
-            field_data['custom_options'] = options_list
-        else:
-            field_data['custom_options'] = 'N/A'
-        
-        field_inventory.append(field_data)
-        
     return field_inventory
 
-# --- Main execution block to handle file loading ---
 
-if __name__ == "__main__":
-    # --- Configuration ---
+def main():
+    if not all([DATA_DIR, EXTRACT_FIELDS_PATH, TRANSFORM_FIELDS_PATH]):
+        print("!!! Error: DATA_DIR, EXTRACT_FIELDS_PATH, or TRANSFORM_FIELDS_PATH not found in environment variables.")
+        return
 
     field_files = glob.glob(f"{INPUT_DIR}/ticket_fields_*.json")
     timestamped_files = []
@@ -94,7 +79,7 @@ if __name__ == "__main__":
             with open(FILE_NAME, 'r', encoding='utf-8') as f:
                 print(f"Reading data from {FILE_NAME}...")
                 json_data = json.load(f)
-            
+
             # 3. Process the loaded data
             processed_fields = extract_zendesk_fields(json_data)
 
@@ -105,15 +90,17 @@ if __name__ == "__main__":
             # Print the final result in a nicely formatted JSON output
             print(json.dumps(processed_fields, indent=4))
             # Save the processed fields to a JSON file
-            output_file = f"{INPUT_DIR}/processed_field_inventory.json"
+            output_file = f"{OUTPUT_DIR}/ticket_fields_{int(datetime.now().timestamp())}.json"
             try:
                 with open(output_file, 'w', encoding='utf-8') as outf:
                     json.dump(processed_fields, outf, ensure_ascii=False, indent=4)
                 print(f"\n✅ Processed field inventory saved to '{output_file}'")
             except Exception as save_err:
                 print(f"❌ Error saving processed field inventory to '{output_file}': {save_err}")
-
         except json.JSONDecodeError:
             print(f"❌ Error: Failed to decode JSON from '{FILE_NAME}'. Check if the file contents are valid JSON.")
         except Exception as e:
             print(f"❌ An unexpected error occurred: {e}")
+
+if __name__ == "__main__":
+    main()
