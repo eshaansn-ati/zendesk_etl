@@ -23,12 +23,13 @@ if project_root not in sys.path:
 from utils.transform_utils import load_latest_file_from_dir
 
 
-def flatten_tickets(ticket_data):
+def flatten_tickets(ticket_data, field_map=None):
     """
     Flatten ticket data into a list of dictionaries.
     
     Args:
         ticket_data: List of ticket dictionaries from JSON
+        field_map: Dictionary mapping field IDs (as strings) to field names
         
     Returns:
         List of flattened ticket records
@@ -69,6 +70,23 @@ def flatten_tickets(ticket_data):
             "submitter_id": submitter_id,
         }
         
+        # Process custom_fields using field_map
+        if field_map:
+            custom_fields = ticket.get("custom_fields", [])
+            for field in custom_fields:
+                field_id = str(field.get("id"))
+                field_value = field.get("value")
+                
+                # Get field name from mapping, fallback to field_id if not found
+                field_name = field_map.get(field_id, f"custom_field_{field_id}")
+                
+                # Sanitize field name for CSV column (replace spaces and special chars with underscores)
+                field_name = field_name.replace(" ", "_").replace("/", "_").replace("-", "_")
+                # Remove any other non-alphanumeric characters except underscores
+                field_name = "".join(c if c.isalnum() or c == "_" else "_" for c in field_name)
+                
+                flat_record[field_name] = field_value
+        
         flattened_data.append(flat_record)
     
     return flattened_data
@@ -108,9 +126,22 @@ def main():
         ticket_data = ticket_data_df.to_dict('records')
         print(f"Loaded {len(ticket_data)} tickets from {file_name}")
         
+        # Load field map for custom_fields mapping
+        fields_transform_path = cfg.transform["ticket_fields"]
+        fields_output_dir = f"{data_dir}/{fields_transform_path}/mappings"
+        field_map_file = load_latest_file_from_dir(fields_output_dir, file_pattern="field_map_*.json")
+        
+        field_map = None
+        if field_map_file and os.path.exists(field_map_file):
+            with open(field_map_file, 'r', encoding='utf-8') as f:
+                field_map = json.load(f)
+            print(f"Loaded field map with {len(field_map)} fields from {field_map_file}")
+        else:
+            print("⚠️  Warning: Field map not found. Custom fields will not be mapped.")
+        
         # Flatten the data
         print(f"\nStarting transformation of {len(ticket_data)} records...")
-        flattened_data = flatten_tickets(ticket_data)
+        flattened_data = flatten_tickets(ticket_data, field_map=field_map)
         print("Transformation complete.")
         
         # Export to CSV

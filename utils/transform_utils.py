@@ -10,7 +10,7 @@ def load_latest_file_from_dir(INPUT_DIR, file_pattern="*.json"):
     Args:
         INPUT_DIR: Directory to search for files
         file_pattern: Glob pattern to match files (default: "*.json")
-                     Examples: "ticket_fields_*.json", "tickets_until_*.json", "*.json"
+                     Examples: "ticket_fields_*.json", "tickets_*.csv", "*.json"
     
     Returns:
         Path to the latest file, or None if no matching files found
@@ -21,9 +21,10 @@ def load_latest_file_from_dir(INPUT_DIR, file_pattern="*.json"):
 
     for filepath in matching_files:
         fname = os.path.basename(filepath)
-        # Extract timestamp from filename - look for numbers before .json
-        # Handles formats like: ticket_fields_{timestamp}.json, tickets_until_{timestamp}.json
-        match = re.search(r'(\d+)\.json$', fname)
+        # Extract timestamp from filename - look for numbers before file extension
+        # Handles formats like: ticket_fields_{timestamp}.json, tickets_{timestamp}.csv
+        # Match any file extension (json, csv, etc.)
+        match = re.search(r'(\d+)\.(json|csv|txt|parquet)$', fname, re.IGNORECASE)
         if match:
             try:
                 timestamp = int(match.group(1))

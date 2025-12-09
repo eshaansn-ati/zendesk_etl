@@ -6,6 +6,7 @@ Endpoint-specific transform.py files import and use these functions.
 """
 
 import json
+import os
 
 
 def create_id_mapping(data, output_dir, timestamp, mapping_name, key_extractor, value_extractor, entity_name):
@@ -35,7 +36,8 @@ def create_id_mapping(data, output_dir, timestamp, mapping_name, key_extractor, 
     
     # Save mapping
     if mapping:
-        mapping_file = f"{output_dir}/{mapping_name}_{timestamp}.json"
+        os.makedirs(f"{output_dir}/mappings", exist_ok=True)
+        mapping_file = f"{output_dir}/mappings/{mapping_name}_{timestamp}.json"
         with open(mapping_file, 'w', encoding='utf-8') as f:
             json.dump(mapping, f, ensure_ascii=False, indent=2)
         print(f"-> {entity_name.capitalize()} ID mapping saved: {mapping_file} ({len(mapping)} {entity_name})")
