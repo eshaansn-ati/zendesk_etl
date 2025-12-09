@@ -1,0 +1,9 @@
+# @package _global_
+endpoint: organizations
+resource_key: organizations
+use_incremental: true
+output_subdir: organizations
+timestamp_file: last_sync_timestamp_organizations.txt
+include_param: null
+count_endpoint: null
+

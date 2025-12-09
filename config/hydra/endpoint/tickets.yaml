@@ -1,0 +1,9 @@
+# @package _global_
+endpoint: tickets
+resource_key: tickets
+use_incremental: true
+output_subdir: tickets
+timestamp_file: last_sync_timestamp_tickets.txt
+include_param: users,organizations  # Include related users and organizations in tickets
+count_endpoint: tickets/count.json
+

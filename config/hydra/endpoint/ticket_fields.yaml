@@ -1,0 +1,9 @@
+# @package _global_
+endpoint: ticket_fields
+resource_key: ticket_fields
+use_incremental: false
+output_subdir: fields
+timestamp_file: null
+include_param: null
+count_endpoint: null
+

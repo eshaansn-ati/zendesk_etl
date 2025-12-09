@@ -1,0 +1,28 @@
+defaults:
+  - endpoint: tickets
+
+# Zendesk API credentials (load from .env or override via command line)
+zendesk:
+  subdomain: ${oc.env:ZENDESK_SUBDOMAIN}
+  email: ${oc.env:ZENDESK_EMAIL}
+  api_token: ${oc.env:ZENDESK_API_TOKEN}
+
+# Directory paths
+paths:
+  data_dir: ${oc.env:DATA_DIR,./data}
+  config_dir: ${oc.env:CONFIG_DIR,./config}
+  
+# Extract paths
+extract:
+  tickets: extract/tickets
+  ticket_fields: extract/fields
+  users: extract/users
+  organizations: extract/organizations
+
+# Transform paths
+transform:
+  tickets: transform/tickets
+  ticket_fields: transform/fields
+  users: transform/users
+  organizations: transform/organizations
+

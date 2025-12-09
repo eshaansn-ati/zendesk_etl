@@ -1,0 +1,9 @@
+# @package _global_
+endpoint: users
+resource_key: users
+use_incremental: true
+output_subdir: users
+timestamp_file: last_sync_timestamp_users.txt
+include_param: null
+count_endpoint: null
+
