@@ -56,6 +56,11 @@ def extract_simple_endpoint(subdomain, resource, auth, output_dir):
         records = data.get(resource)
         
         if records:
+            # Add _extracted_at timestamp to each record
+            extracted_at = datetime.now().isoformat()
+            for record in records:
+                record['_extracted_at'] = extracted_at
+            
             all_records.extend(records)
             print(f"-> Successfully fetched {len(all_records)} {resource}.")
             
@@ -100,6 +105,9 @@ def extract_incremental_endpoint(resource, subdomain, start_time, auth, include_
     all_records = []
     final_end_time = None
     
+    # Set extraction timestamp once for the entire extraction run
+    extracted_at = datetime.now().isoformat()
+    
     print(f"\n--- Starting Incremental Export for {resource} ---")
     print(f"-> Starting from timestamp: {start_time}")
     
@@ -121,6 +129,10 @@ def extract_incremental_endpoint(resource, subdomain, start_time, auth, include_
         
         records = data.get(resource)
         if records:
+            # Add _extracted_at timestamp to each record (using timestamp from start of extraction)
+            for record in records:
+                record['_extracted_at'] = extracted_at
+            
             all_records.extend(records)
             print(f"   Fetched {len(records)} records. Total records: {len(all_records):,}")
         

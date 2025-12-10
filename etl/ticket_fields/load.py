@@ -18,7 +18,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from utils.db_utils import load_json_to_postgres
+from etl.load import load_json_to_postgres
 from utils.transform_utils import load_latest_file_from_dir
 
 
@@ -27,10 +27,13 @@ def main():
     # Check for incremental flag
     incremental = "--incremental" in sys.argv or os.getenv("INCREMENTAL_LOAD", "false").lower() == "true"
     
+    # Filter out --incremental from Hydra overrides (Hydra doesn't understand it)
+    hydra_overrides = [arg for arg in sys.argv[1:] if arg != "--incremental"]
+    
     # Initialize Hydra
     config_path = os.path.relpath(os.path.join(project_root, "config", "hydra"), os.path.dirname(__file__))
     with initialize(config_path=config_path, version_base=None):
-        cfg = compose(config_name="config", overrides=["endpoint=ticket_fields"] + sys.argv[1:])
+        cfg = compose(config_name="config", overrides=["endpoint=ticket_fields"] + hydra_overrides)
         
         data_dir = cfg.paths.data_dir
         config_dir = cfg.paths.config_dir
@@ -54,10 +57,10 @@ def main():
         load_json_to_postgres(
             json_path=json_file,
             table_name="ticket_fields",
-            primary_key="id",
+            primary_key=["id", "_loaded_at"],
             if_exists="replace",
-            incremental=incremental,
-            updated_at_column="updated_at",
+            incremental=False, # ticket_fields can not be incremental
+            updated_at_column="_loaded_at",
             config_dir=config_dir
         )
         

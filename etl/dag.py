@@ -30,6 +30,12 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 
+@task(name="skip_placeholder", log_prints=True)
+def skip_placeholder():
+    """Placeholder task that returns True when a phase is skipped."""
+    return True
+
+
 @task(name="extract_ticket_fields", log_prints=True)
 def extract_ticket_fields():
     """Extract ticket fields from Zendesk."""
@@ -223,51 +229,98 @@ def load_tickets(_transform_result, incremental: bool = False):
 
 
 @flow(name="zendesk_etl_pipeline", log_prints=True)
-def zendesk_etl_pipeline(incremental: bool = False):
+def zendesk_etl_pipeline(
+    incremental: bool = False,
+    run_extract: bool = True,
+    run_transform: bool = True,
+    run_load: bool = True
+):
     """
     Main ETL pipeline flow.
     
     Args:
         incremental: If True, use incremental loading mode for database loads.
                     Defaults to False (full load).
+        run_extract: If True, run extract steps. Defaults to True.
+        run_transform: If True, run transform steps. Defaults to True.
+        run_load: If True, run load steps. Defaults to True.
     
     Pipeline execution order:
-    1. Extract all endpoints (can run in parallel)
-    2. Transform ticket_fields first (needed for tickets transform)
-    3. Transform organizations and users (can run in parallel)
-    4. Transform tickets (waits for ticket_fields transform)
-    5. Load all endpoints (can run in parallel after transforms complete)
+    1. Extract all endpoints (can run in parallel) - if run_extract=True
+    2. Transform ticket_fields first (needed for tickets transform) - if run_transform=True
+    3. Transform organizations and users (can run in parallel) - if run_transform=True
+    4. Transform tickets (waits for ticket_fields transform) - if run_transform=True
+    5. Load all endpoints (can run in parallel after transforms complete) - if run_load=True
     """
     print("=" * 80)
     print("Starting Zendesk ETL Pipeline")
     print("=" * 80)
+    print(f"Configuration: extract={run_extract}, transform={run_transform}, load={run_load}, incremental={incremental}")
+    print("=" * 80)
+    
+    # Initialize task variables
+    extract_ticket_fields_task = None
+    extract_organizations_task = None
+    extract_users_task = None
+    extract_tickets_task = None
+    
+    transform_ticket_fields_task = None
+    transform_organizations_task = None
+    transform_users_task = None
+    transform_tickets_task = None
+    
+    load_ticket_fields_task = None
+    load_organizations_task = None
+    load_users_task = None
+    load_tickets_task = None
     
     # Step 1: Extract all endpoints (can run in parallel)
-    print("\n[Step 1] Extracting data from Zendesk...")
-    extract_ticket_fields_task = extract_ticket_fields()
-    extract_organizations_task = extract_organizations()
-    extract_users_task = extract_users()
-    extract_tickets_task = extract_tickets()
+    if run_extract:
+        print("\n[Step 1] Extracting data from Zendesk...")
+        extract_ticket_fields_task = extract_ticket_fields()
+        extract_organizations_task = extract_organizations()
+        extract_users_task = extract_users()
+        extract_tickets_task = extract_tickets()
+    else:
+        print("\n[Step 1] Skipping extract (run_extract=False)")
+        # Create placeholder tasks to satisfy dependencies
+        extract_ticket_fields_task = skip_placeholder()
+        extract_organizations_task = skip_placeholder()
+        extract_users_task = skip_placeholder()
+        extract_tickets_task = skip_placeholder()
     
-    # Step 2: Transform ticket_fields first (needed for tickets transform)
-    print("\n[Step 2] Transforming ticket_fields...")
-    transform_ticket_fields_task = transform_ticket_fields(extract_ticket_fields_task)
-    
-    # Step 3: Transform organizations and users (can run in parallel)
-    print("\n[Step 3] Transforming organizations and users...")
-    transform_organizations_task = transform_organizations(extract_organizations_task)
-    transform_users_task = transform_users(extract_users_task)
-    
-    # Step 4: Transform tickets (waits for ticket_fields transform)
-    print("\n[Step 4] Transforming tickets...")
-    transform_tickets_task = transform_tickets(extract_tickets_task, transform_ticket_fields_task)
+    # Step 2-4: Transform steps
+    if run_transform:
+        # Step 2: Transform ticket_fields first (needed for tickets transform)
+        print("\n[Step 2] Transforming ticket_fields...")
+        transform_ticket_fields_task = transform_ticket_fields(extract_ticket_fields_task)
+        
+        # Step 3: Transform organizations and users (can run in parallel)
+        print("\n[Step 3] Transforming organizations and users...")
+        transform_organizations_task = transform_organizations(extract_organizations_task)
+        transform_users_task = transform_users(extract_users_task)
+        
+        # Step 4: Transform tickets (waits for ticket_fields transform)
+        print("\n[Step 4] Transforming tickets...")
+        transform_tickets_task = transform_tickets(extract_tickets_task, transform_ticket_fields_task)
+    else:
+        print("\n[Step 2-4] Skipping transform (run_transform=False)")
+        # Create placeholder tasks to satisfy dependencies
+        # Note: Transform tasks depend on extract tasks, so we still need extract placeholders
+        transform_ticket_fields_task = skip_placeholder()
+        transform_organizations_task = skip_placeholder()
+        transform_users_task = skip_placeholder()
+        transform_tickets_task = skip_placeholder()
     
     # Step 5: Load all endpoints (can run in parallel after transforms complete)
-    print("\n[Step 5] Loading data to PostgreSQL...")
-    load_ticket_fields_task = load_ticket_fields(transform_ticket_fields_task, incremental=incremental)
-    load_organizations_task = load_organizations(transform_organizations_task, incremental=incremental)
-    load_users_task = load_users(transform_users_task, incremental=incremental)
-    load_tickets_task = load_tickets(transform_tickets_task, incremental=incremental)
+    if run_load:
+        print("\n[Step 5] Loading data to PostgreSQL...")
+        load_ticket_fields_task = load_ticket_fields(transform_ticket_fields_task, incremental=incremental)
+        load_organizations_task = load_organizations(transform_organizations_task, incremental=incremental)
+        load_users_task = load_users(transform_users_task, incremental=incremental)
+        load_tickets_task = load_tickets(transform_tickets_task, incremental=incremental)
+    else:
+        print("\n[Step 5] Skipping load (run_load=False)")
     
     print("\n" + "=" * 80)
     print("✅ Zendesk ETL Pipeline completed successfully!")
@@ -296,7 +349,7 @@ def zendesk_etl_pipeline(incremental: bool = False):
 
 
 if __name__ == "__main__":
-    # Allow running with --incremental flag
+    # Allow running with various flags to control pipeline execution
     import argparse
     parser = argparse.ArgumentParser(description="Run Zendesk ETL Pipeline")
     parser.add_argument(
@@ -304,7 +357,62 @@ if __name__ == "__main__":
         action="store_true",
         help="Use incremental loading mode for database loads"
     )
+    parser.add_argument(
+        "--extract-only",
+        action="store_true",
+        help="Run only extract steps (skip transform and load)"
+    )
+    parser.add_argument(
+        "--transform-only",
+        action="store_true",
+        help="Run only transform steps (skip extract and load)"
+    )
+    parser.add_argument(
+        "--load-only",
+        action="store_true",
+        help="Run only load steps (skip extract and transform)"
+    )
+    parser.add_argument(
+        "--no-extract",
+        action="store_true",
+        help="Skip extract steps"
+    )
+    parser.add_argument(
+        "--no-transform",
+        action="store_true",
+        help="Skip transform steps"
+    )
+    parser.add_argument(
+        "--no-load",
+        action="store_true",
+        help="Skip load steps"
+    )
     args = parser.parse_args()
     
-    zendesk_etl_pipeline(incremental=args.incremental)
+    # Determine which phases to run
+    # If a "*-only" flag is set, only run that phase
+    if args.extract_only:
+        run_extract = True
+        run_transform = False
+        run_load = False
+    elif args.transform_only:
+        run_extract = False
+        run_transform = True
+        run_load = False
+    elif args.load_only:
+        run_extract = False
+        run_transform = False
+        run_load = True
+    else:
+        # Otherwise, respect the individual skip flags
+        run_extract = not args.no_extract
+        run_transform = not args.no_transform
+        run_load = not args.no_load
+    
+    zendesk_etl_pipeline(
+        incremental=args.incremental,
+        run_extract=run_extract,
+        run_transform=run_transform,
+        run_load=run_load
+    )
 

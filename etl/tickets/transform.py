@@ -1,7 +1,7 @@
 """
 Tickets Transformation Script
 
-Transforms tickets data into flattened CSV.
+Transforms tickets data into flattened Parquet.
 """
 
 import pandas as pd
@@ -20,16 +20,17 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from utils.transform_utils import load_latest_file_from_dir
+from utils.transform_utils import load_latest_file_from_dir, deduplicate_dataframe, export_to_parquet
 
 
-def flatten_tickets(ticket_data, field_map=None):
+def flatten_tickets(ticket_data, field_map=None, transformed_at=None):
     """
     Flatten ticket data into a list of dictionaries.
     
     Args:
         ticket_data: List of ticket dictionaries from JSON
         field_map: Dictionary mapping field IDs (as strings) to field names
+        transformed_at: ISO datetime string indicating when the data was transformed
         
     Returns:
         List of flattened ticket records
@@ -69,6 +70,10 @@ def flatten_tickets(ticket_data, field_map=None):
             "assignee_id": assignee_id,
             "submitter_id": submitter_id,
         }
+        
+        # Add transformed_at timestamp if provided
+        if transformed_at:
+            flat_record["_transformed_at"] = transformed_at
         
         # Process custom_fields using field_map
         if field_map:
@@ -126,6 +131,9 @@ def main():
         ticket_data = ticket_data_df.to_dict('records')
         print(f"Loaded {len(ticket_data)} tickets from {file_name}")
         
+        # Get current timestamp for transformation
+        transformed_at = datetime.now().isoformat()
+        
         # Load field map for custom_fields mapping
         fields_transform_path = cfg.transform["ticket_fields"]
         fields_output_dir = f"{data_dir}/{fields_transform_path}/mappings"
@@ -141,14 +149,23 @@ def main():
         
         # Flatten the data
         print(f"\nStarting transformation of {len(ticket_data)} records...")
-        flattened_data = flatten_tickets(ticket_data, field_map=field_map)
+        flattened_data = flatten_tickets(ticket_data, field_map=field_map, transformed_at=transformed_at)
         print("Transformation complete.")
         
-        # Export to CSV
-        output_filename = f"{output_dir}/tickets_{int(datetime.now().timestamp())}.csv"
+        # Convert to DataFrame for deduplication
         df = pd.DataFrame(flattened_data)
-        df.to_csv(output_filename, index=False)
-        print(f"\n✅ Success! Table saved to: {output_filename}")
+        
+        # Deduplicate by ticket_id, keeping the most recent version (highest updated_at)
+        df, _ = deduplicate_dataframe(
+            df, 
+            primary_key_column='ticket_id', 
+            updated_at_column='updated_at',
+            entity_name='tickets'
+        )
+        
+        # Export to Parquet
+        export_to_parquet(df, output_dir, "tickets")
+        print(f"✅ Final record count: {len(df)} tickets")
         print(f"\n✅ Successfully transformed tickets")
 
 

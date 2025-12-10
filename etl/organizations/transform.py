@@ -1,7 +1,7 @@
 """
 Organizations Transformation Script
 
-Transforms organizations data into flattened CSV.
+Transforms organizations data into flattened Parquet.
 """
 
 import pandas as pd
@@ -21,17 +21,18 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from utils.transform_utils import load_latest_file_from_dir
+from utils.transform_utils import load_latest_file_from_dir, deduplicate_dataframe, export_to_parquet
 from utils.extract_utils import save_sync_time
 from etl.transform import create_id_mapping
 
 
-def flatten_organizations(orgs_data):
+def flatten_organizations(orgs_data, transformed_at):
     """
     Flatten organization data into a list of dictionaries.
     
     Args:
         orgs_data: List of organization dictionaries from JSON
+        transformed_at: ISO datetime string indicating when the data was transformed
         
     Returns:
         List of flattened organization records
@@ -44,6 +45,7 @@ def flatten_organizations(orgs_data):
             "domain_names": org.get("domain_names"),
             "created_at": org.get("created_at"),
             "updated_at": org.get("updated_at"),
+            "_transformed_at": transformed_at,
         }
         flattened_data.append(flat_record)
     return flattened_data
@@ -86,9 +88,11 @@ def main():
         
         print(f"Loaded {len(orgs_data)} organizations from {file_name}")
         
+        # Get current timestamp for transformation
+        transformed_at = datetime.now().isoformat()
+        timestamp = int(datetime.now().timestamp())
         
         # Create organization ID to name mapping
-        timestamp = int(datetime.now().timestamp())
         org_mapping = create_id_mapping(
             data=orgs_data,
             output_dir=output_dir,
@@ -100,13 +104,19 @@ def main():
         )
         
         # Basic transformation - flatten organization data
-        flattened_data = flatten_organizations(orgs_data)
+        flattened_data = flatten_organizations(orgs_data, transformed_at=transformed_at)
         
-        # Export to CSV
-        output_filename = f"{output_dir}/organizations_{int(datetime.now().timestamp())}.csv"
+        # Convert to DataFrame and deduplicate
         df = pd.DataFrame(flattened_data)
-        df.to_csv(output_filename, index=False)
-        print(f"\n✅ Success! Organizations table saved to: {output_filename}")
+        df, _ = deduplicate_dataframe(
+            df,
+            primary_key_column='organization_id',
+            updated_at_column='updated_at',
+            entity_name='organizations'
+        )
+        
+        # Export to Parquet
+        export_to_parquet(df, output_dir, "organizations", timestamp=timestamp)
         print(f"\n✅ Successfully transformed organizations")
 
 

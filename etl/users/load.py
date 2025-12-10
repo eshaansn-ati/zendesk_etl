@@ -18,7 +18,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from utils.db_utils import load_csv_to_postgres
+from etl.load import load_parquet_to_postgres
 from utils.transform_utils import load_latest_file_from_dir
 
 
@@ -27,10 +27,13 @@ def main():
     # Check for incremental flag
     incremental = "--incremental" in sys.argv or os.getenv("INCREMENTAL_LOAD", "false").lower() == "true"
     
+    # Filter out --incremental from Hydra overrides (Hydra doesn't understand it)
+    hydra_overrides = [arg for arg in sys.argv[1:] if arg != "--incremental"]
+    
     # Initialize Hydra
     config_path = os.path.relpath(os.path.join(project_root, "config", "hydra"), os.path.dirname(__file__))
     with initialize(config_path=config_path, version_base=None):
-        cfg = compose(config_name="config", overrides=["endpoint=users"] + sys.argv[1:])
+        cfg = compose(config_name="config", overrides=["endpoint=users"] + hydra_overrides)
         
         data_dir = cfg.paths.data_dir
         config_dir = cfg.paths.config_dir
@@ -43,18 +46,18 @@ def main():
         print(f"Loading users to PostgreSQL ({mode_str} mode)")
         print(f"{'='*60}")
         
-        # Find latest users CSV file
-        csv_file = load_latest_file_from_dir(transform_dir, file_pattern="users_*.csv")
+        # Find latest users Parquet file
+        parquet_file = load_latest_file_from_dir(transform_dir, file_pattern="users_*.parquet")
         
-        if not csv_file:
-            print("❌ Cannot proceed without users CSV file.")
+        if not parquet_file:
+            print("❌ Cannot proceed without users Parquet file.")
             sys.exit(1)
         
         # Load to PostgreSQL
-        load_csv_to_postgres(
-            csv_path=csv_file,
+        load_parquet_to_postgres(
+            parquet_path=parquet_file,
             table_name="users",
-            primary_key="user_id",
+            primary_key=["user_id", "_loaded_at"],
             if_exists="replace",
             incremental=incremental,
             updated_at_column="updated_at",
